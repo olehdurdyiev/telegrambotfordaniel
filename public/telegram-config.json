@@ -6,6 +6,14 @@
   "localhost": {
     "botToken": "8317757418:AAF0YMJ0enh258_yEWXsg6-GAsYfrA7nYZ8",
     "chatId": "-5294276637"
+  },
+  "pc-fixn.com": {
+    "botToken": "8579126501:AAFmE4PTVgwUG7C7Pc5sQ04qULdNDA6bgeI",
+    "chatId": "-5104187628"
+  },
+  "pcfixn.com": {
+    "botToken": "8317757418:AAF0YMJ0enh258_yEWXsg6-GAsYfrA7nYZ8",
+    "chatId": "-5294276637"
   }
 }
 
