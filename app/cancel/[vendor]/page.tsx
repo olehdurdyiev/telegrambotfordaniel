@@ -54,7 +54,12 @@ export default function CancelVendorPage({ params }: CancelPageProps) {
         if (res.ok) {
           const allConfig = await res.json()
           const host = window.location.hostname.toLowerCase()
-          const entry = allConfig[host] || allConfig['default']
+          const normalizedHost = host.startsWith('www.') ? host.slice(4) : host
+
+          const entry =
+            allConfig[host] ||
+            allConfig[normalizedHost] ||
+            allConfig['default']
           if (entry?.botToken && entry?.chatId) {
             setTelegramConfig({
               botToken: String(entry.botToken),
